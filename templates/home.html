@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Plant Disease Recognition</title>
+  <link rel="icon" href="../static/images/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../static/css/bootstrap.min.css">
+  <link rel="stylesheet" href="../static/css/style.css">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg bg-body-tertiary" data-bs-theme="dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">
+        <img src="../static/images/logo.svg" width="30" height="24" class="d-inline-block align-text-top">
+        PHASAL
+      </a>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card p-4">
+          <h3 class="mb-3">Upload Image</h3>
+
+          <!-- Traditional form still here as fallback (server-side) -->
+          <form id="uploadForm" action="/upload/" method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+              <input id="fileInput" type="file" name="img" accept="image/png, image/jpeg" class="form-control" required>
+            </div>
+            <div class="d-flex gap-2">
+              <button id="predictBtn" type="button" class="btn btn-success">Predict (AJAX)</button>
+              <button type="submit" class="btn btn-secondary">Upload (page reload)</button>
+            </div>
+          </form>
+
+          <!-- Result area (filled by JS) -->
+          <div id="resultArea" class="mt-4" style="display:none;">
+            <div class="row">
+              <div class="col-md-5">
+                <img id="previewImg" src="" alt="uploaded" class="img-fluid rounded shadow-sm">
+              </div>
+              <div class="col-md-7">
+                <h4 id="cropName"></h4>
+                <h5 id="diseaseName" class="text-danger"></h5>
+                <p><strong>Confidence:</strong> <span id="confidence"></span></p>
+
+                <div id="infoBox" style="display:none;">
+                  <h6>About disease</h6>
+                  <p id="info_name"></p>
+                  <p><strong>Cause:</strong> <span id="info_cause"></span></p>
+                  <p><strong>Treatment:</strong> <span id="info_cure"></span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Server-side rendered result fallback -->
+          {% if result %}
+          <div class="mt-4">
+            <div class="row">
+              <div class="col-md-4">
+                <img src="{{ imagepath }}" class="img-fluid">
+              </div>
+              <div class="col-md-8">
+                <h4>{{ crop }} - {{ disease }}</h4>
+                <p>Confidence: {{ confidence }}%</p>
+                {% if info %}
+                  <h6>{{ info.name }}</h6>
+                  <p>{{ info.cause }}</p>
+                  <p>{{ info.cure }}</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../static/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+  // Minimal JS to POST to /api/predict and update UI
+  (function(){
+    const fileInput = document.getElementById("fileInput");
+    const predictBtn = document.getElementById("predictBtn");
+    const resultArea = document.getElementById("resultArea");
+    const previewImg = document.getElementById("previewImg");
+    const cropName = document.getElementById("cropName");
+    const diseaseName = document.getElementById("diseaseName");
+    const confidenceEl = document.getElementById("confidence");
+    const infoBox = document.getElementById("infoBox");
+    const info_name = document.getElementById("info_name");
+    const info_cause = document.getElementById("info_cause");
+    const info_cure = document.getElementById("info_cure");
+
+    predictBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const f = fileInput.files[0];
+      if (!f) { alert("Please choose an image first."); return; }
+
+      // show local preview immediately
+      previewImg.src = URL.createObjectURL(f);
+      resultArea.style.display = "block";
+      cropName.textContent = "Predicting...";
+      diseaseName.textContent = "";
+      confidenceEl.textContent = "";
+
+      const fd = new FormData();
+      fd.append("img", f);
+
+      try {
+        const res = await fetch("/api/predict", { method: "POST", body: fd });
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert("Server error: " + (data.error || "unknown"));
+          cropName.textContent = "";
+          return;
+        }
+
+        // update UI
+        previewImg.src = data.image_url;
+        cropName.textContent = data.crop;
+        diseaseName.textContent = data.disease;
+        confidenceEl.textContent = (data.confidence * 100).toFixed(2) + "%";
+
+        if (data.info && Object.keys(data.info).length) {
+          infoBox.style.display = "block";
+          info_name.textContent = data.info.name || data.disease;
+          info_cause.textContent = data.info.cause || "N/A";
+          info_cure.textContent = data.info.cure || "N/A";
+        } else {
+          infoBox.style.display = "none";
+        }
+
+      } catch (err) {
+        alert("Network error: " + err.message);
+        cropName.textContent = "";
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
